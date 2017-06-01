@@ -7,15 +7,15 @@ sudo: false
 os:
 - linux
 
-branches:
-  only:
-  - master
-  - /^v\d+\.\d+\.\d+/
-
 addons:
   apt:
     packages:
       - xvfb
+
+branches:
+  only:
+  - master
+  - /^v\d+\.\d+\.\d+/
 
 install:
   - export DISPLAY=':99.0'
