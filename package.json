@@ -5,7 +5,7 @@
   "main": "out/src/index.js",
   "scripts": {
     "build": "rimraf out && tsc --declaration && rimraf out/test",
-    "test": "electron-mocha test/*_spec.ts --require ts-node/register"
+    "test": "node_modules/.bin/electron-mocha test/*_spec.ts --require ts-node/register"
   },
   "author": "Samuel Attard",
   "license": "MIT",
