@@ -1,0 +1,35 @@
+{
+  "name": "electron-ionizer",
+  "version": "0.0.1",
+  "description": "Secure cross-platform plugin management for Electron apps",
+  "main": "out/src/index.js",
+  "scripts": {
+    "build": "rimraf out && tsc --declaration && rimraf out/test",
+    "test": "electron-mocha test/*_spec.ts --require ts-node/register"
+  },
+  "author": "Samuel Attard",
+  "license": "MIT",
+  "repository": "https://github.com/electron-ionizer/ionizer",
+  "dependencies": {
+    "fs-extra": "^3.0.1",
+    "node-fetch": "^1.7.0",
+    "semver": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.0.0",
+    "@types/fetch-mock": "^5.8.2",
+    "@types/fs-extra": "^3.0.2",
+    "@types/mocha": "^2.2.41",
+    "@types/node": "^7.0.23",
+    "@types/node-fetch": "^1.6.7",
+    "@types/semver": "^5.3.31",
+    "chai": "^4.0.1",
+    "electron": "^1.6.10",
+    "electron-mocha": "^3.4.0",
+    "fetch-mock": "^5.11.0",
+    "proxyquire": "^1.8.0",
+    "rimraf": "^2.6.1",
+    "ts-node": "^3.0.4",
+    "typescript": "^2.3.4"
+  }
+}
