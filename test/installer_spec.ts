@@ -3,6 +3,7 @@ import { expect } from 'chai';
 import * as fetchMock from 'fetch-mock';
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import * as NodeRsa from 'node-rsa';
 
 import Ionizer from '../src'
 import { BASE, expectRejection } from './util';
@@ -15,11 +16,13 @@ const fakePluginData = [
             {
                 version: '0.0.1',
                 hash: 'hash001',
+                validated: true,
             },
             {
                 version: '0.0.2',
                 hash: 'hash002',
-            }
+                validated: true,
+            },
         ],
     },
 ];
@@ -28,16 +31,21 @@ describe('installer', () => {
     const ionizerFolder = path.resolve(app.getPath('userData'), 'ionizer');
     let instance: Ionizer;
     let mock: typeof fetchMock;
+    const key = (new NodeRsa({ b: 8 })).generateKeyPair();
+    const publicKey = key.exportKey('public').toString();
 
     beforeEach(() => {
         mock = (<any>fetchMock).sandbox();
         mock.get('end:/rest/healthcheck', { alive: true });
+        mock.get('end:/rest/public', { key: publicKey });
         instance = new Ionizer(BASE, mock);
         process.noAsar = true;
+        (<any>global).IS_TESTING_IONIZER = true;
     });
 
     afterEach(() => {
         process.noAsar = false;
+        (<any>global).IS_TESTING_IONIZER = false;
     })
 
     describe('list installed', () => {
@@ -55,9 +63,9 @@ describe('installer', () => {
         });
 
         it('should store the plugin manifest the first time it is fetched', async () => {
-            mock.get('end:/rest/plugin', [{ name: 'fake', versions: [] }]);
+            mock.get('end:/rest/plugin', [{ name: 'fake', versions: [{ validated: true }] }]);
             await instance.getPlugins();
-            expect(await fs.readJSON(path.resolve(ionizerFolder, 'manifest.json'))).to.deep.equal([{ name: 'fake', versions: [] }]);
+            expect(await fs.readJSON(path.resolve(ionizerFolder, 'manifest.json'))).to.deep.equal([{ name: 'fake', versions: [{ validated: true }] }]);
         });
 
         it('should update the plugin manifest on sequentual fetches', async () => {
@@ -84,13 +92,13 @@ describe('installer', () => {
         });
 
         it('should create the ionizer folder', async () => {
-            mock.get('end:/download', 'file_content');
+            mock.get('end:/download', key.encryptPrivate('file_content'));
             await instance.install(plugins[0]);
             expect(await fs.pathExists(ionizerFolder)).to.equal(true);
         });
 
         it('should create the plugin folder and store the version file', async () => {
-            mock.get('end:/download', 'file_content');
+            mock.get('end:/download', key.encryptPrivate('file_content'));
             await instance.install(plugins[0]);
             expect(await fs.pathExists(path.resolve(ionizerFolder, 'id1', 'hash002.asar'))).to.equal(true, 'expected plugin file to be installed');
             expect(await fs.readFile(path.resolve(ionizerFolder, 'id1', 'hash002.asar'), 'utf8')).to.equal('file_content');
@@ -121,7 +129,7 @@ describe('installer', () => {
         });
 
         it('should report no updates after a fresh install', async () => {
-            mock.get('end:/download', 'file_content');
+            mock.get('end:/download', key.encryptPrivate('file_content'));
             await instance.install(plugins[0]);
             mock.get('end:/rest/plugin', fakePluginData);
             expect(await instance.getAvailableUpdates()).to.have.length(0);
@@ -129,7 +137,7 @@ describe('installer', () => {
 
         it('should report an update when a new version is available on the server', async () => {
             const newFakePluginData = Object.assign([], fakePluginData);
-            newFakePluginData[0].versions.push({ version: '0.0.3', hash: 'hash003' });
+            newFakePluginData[0].versions.push({ version: '0.0.3', hash: 'hash003', validated: true });
             mock.get('end:/rest/plugin', newFakePluginData);
             expect(await instance.getAvailableUpdates()).to.have.length(1);
         });
@@ -139,12 +147,19 @@ describe('installer', () => {
             newFakePluginData[0].versions.push({ version: '0.0.3', hash: 'hash003' });
             mock.get('end:/rest/plugin', newFakePluginData);
             const updates = await instance.getAvailableUpdates();
-            mock.get('end:/download', 'new_content');
+            mock.get('end:/download', key.encryptPrivate('new_content'));
             await instance.update(updates[0]);
             expect(await instance.getAvailableUpdates()).to.have.length(0);
             expect(await fs.pathExists(path.resolve(ionizerFolder, 'id1', 'hash002.asar'))).to.equal(false, 'expected old plugin to be removed');
             expect(await fs.pathExists(path.resolve(ionizerFolder, 'id1', 'hash003.asar'))).to.equal(true, 'expected new plugin to exist');
             expect(await fs.readFile(path.resolve(ionizerFolder, 'id1', 'hash003.asar'), 'utf8')).to.equal('new_content');
+        });
+
+        it('should not report an update when a new version is available but not validated', async () => {
+            const newFakePluginData = Object.assign([], fakePluginData);
+            newFakePluginData[0].versions.push({ version: '0.0.4', hash: 'hash004', validated: false });
+            mock.get('end:/rest/plugin', newFakePluginData);
+            expect(await instance.getAvailableUpdates()).to.have.length(0);
         });
 
         it('should throw an error when update is given a normal plugin object', async () => {

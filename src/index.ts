@@ -3,6 +3,7 @@ import { default as fetch, Response } from 'node-fetch';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import * as semver from 'semver';
+import * as NodeRsa from 'node-rsa';
 
 export interface PluginVersion {
     version: string;
@@ -10,6 +11,7 @@ export interface PluginVersion {
     hash: string;
     publishDate: Date;
     downloads: number;
+    validated: boolean;
 }
 
 export interface Plugin {
@@ -91,10 +93,12 @@ export default class Ionizer {
 
     public async getPlugins() {
         await this.errorIfBadHealthCheck();
-        const plugins = await this.json<Plugin[]>(this.fetchImpl(this.constructRestUrl('plugin')));
+        let plugins = await this.json<Plugin[]>(this.fetchImpl(this.constructRestUrl('plugin')));
         for (const plugin of plugins) {
             plugin.versions.sort((a, b) => semver.compare(a.version, b.version));
+            plugin.versions = plugin.versions.filter(version => version.validated);
         }
+        plugins = plugins.filter(plugin => plugin.versions.length > 0);
         await this.ensureLocalDir();
         await fs.writeJSON(this.manifestPath, plugins);
         return plugins;
@@ -158,13 +162,20 @@ export default class Ionizer {
         if (!plugin.versions.length) {
             throw new Error('The provided has plugin has no version to download');
         }
+        const key = new NodeRsa();
+        key.importKey(await this.getPublicKey());
         await this.ensureLocalDir();
         await this.errorIfBadHealthCheck();
         const version = plugin.versions[plugin.versions.length - 1];
-        const buffer = await (await this.fetchImpl(this.constructRestUrl('plugin', plugin.id, 'version', version.hash, 'download'))).buffer();
+        let buffer = await (await this.fetchImpl(this.constructRestUrl('plugin', plugin.id, 'version', version.hash, 'download'))).buffer();
+        // For testing purposes
+        // FIXME: This is stupidly bad but it's the best way I could get the tests actually "testing" :D
+        if ((<any>global).IS_TESTING_IONIZER) {
+            buffer = Buffer.from(JSON.parse(buffer.toString()).data);
+        }
         const pluginFolder = path.resolve(this.pluginRootDir, plugin.id);
         await fs.mkdirs(pluginFolder);
-        await fs.writeFile(this.getVersionPath(plugin, version), buffer);
+        await fs.writeFile(this.getVersionPath(plugin, version), key.decryptPublic(buffer));
     }
 
     public async requirePlugin(plugin: InstalledPlugin) {

@@ -26,14 +26,20 @@ describe('list plugins', () => {
     });
 
     it('should return the plugins when the request succeeds', async () => {
-        mock.get('end:/rest/plugin', [{ name: 'Foo Bar Plugin', versions: [] }]);
+        mock.get('end:/rest/plugin', [{ name: 'Foo Bar Plugin', versions: [{ validated: true }] }]);
         const plugins = await instance.getPlugins();
-        expect(plugins).to.deep.equal([{ name: 'Foo Bar Plugin', versions: [] }]);
+        expect(plugins).to.deep.equal([{ name: 'Foo Bar Plugin', versions: [{ validated: true }] }]);
     });
 
     it('should return the plugin versions sorted if the request succeeds', async () => {
-        mock.get('end:/rest/plugin', [{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.2'}, { version: '0.0.1' }] }]);
+        mock.get('end:/rest/plugin', [{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.2', validated: true }, { version: '0.0.1', validated: true }] }]);
         const plugins = await instance.getPlugins();
-        expect(plugins).to.deep.equal([{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.1'}, { version: '0.0.2' }] }]);
+        expect(plugins).to.deep.equal([{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.1', validated: true }, { version: '0.0.2', validated: true }] }]);
+    });
+
+    it('should filter out versions that aren\'t validated', async () => {
+        mock.get('end:/rest/plugin', [{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.2', validated: true }, { version: '0.0.1', validated: true }, { version: '1.0.0', validated: false }] }]);
+        const plugins = await instance.getPlugins();
+        expect(plugins).to.deep.equal([{ name: 'Foo Bar Plugin', versions: [{ version: '0.0.1', validated: true }, { version: '0.0.2', validated: true }] }]);
     });
 });
